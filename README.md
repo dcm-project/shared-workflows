@@ -9,6 +9,7 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `go-ci.yaml` | Build and test Go projects | All Go repos |
 | `check-aep.yaml` | Validate OpenAPI specs against AEP standards | Repos with OpenAPI |
 | `check-generate.yaml` | Verify generated files are in sync | Repos with code generation |
+| `check-clean-commits.yaml` | Ensure PR commits are cleaned before merge | All repos |
 
 ## Usage
 
