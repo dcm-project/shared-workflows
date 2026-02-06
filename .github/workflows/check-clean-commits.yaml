@@ -1,0 +1,26 @@
+name: Check Clean Commits
+
+on:
+  workflow_call:
+    inputs:
+      base-ref:
+        description: 'Base branch to compare against'
+        type: string
+        default: 'origin/main'
+
+jobs:
+  check-clean-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history needed to compare commits
+
+      - name: Download check script
+        run: |
+          curl -sL https://raw.githubusercontent.com/dcm-project/shared-workflows/main/hack/check-clean-commits.sh \
+            -o /tmp/check-clean-commits.sh
+          chmod +x /tmp/check-clean-commits.sh
+
+      - name: Check commit history is clean
+        run: /tmp/check-clean-commits.sh ${{ inputs.base-ref }}
