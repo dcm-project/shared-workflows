@@ -1,0 +1,39 @@
+name: Go CI
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: 'Path to go.mod file for Go version'
+        type: string
+        default: 'go.mod'
+      run-tests:
+        description: 'Whether to run tests'
+        type: boolean
+        default: true
+      post-test-targets:
+        description: 'Make targets to run after build and test'
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        if: inputs.run-tests
+        run: make test
+
+      - name: Run post-test targets
+        if: inputs.post-test-targets != ''
+        run: make ${{ inputs.post-test-targets }}

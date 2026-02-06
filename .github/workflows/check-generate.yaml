@@ -1,0 +1,37 @@
+name: Check Generated Files
+
+on:
+  workflow_call:
+    inputs:
+      watch-paths:
+        description: 'Paths that trigger regeneration check'
+        type: string
+        default: |
+          api/**
+          **/*.gen.cfg
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for relevant changes
+        uses: tj-actions/changed-files@v47
+        id: filter
+        with:
+          files: ${{ inputs.watch-paths }}
+
+      - name: Set up Go
+        if: steps.filter.outputs.any_changed == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check generated files
+        if: steps.filter.outputs.any_changed == 'true'
+        run: make check-generate-api
+
+      - name: Skip
+        if: steps.filter.outputs.any_changed == 'false'
+        run: echo "No API changes, skipping generation check"

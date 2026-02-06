@@ -1,0 +1,39 @@
+name: Check AEP Compliance
+
+on:
+  workflow_call:
+    inputs:
+      openapi-paths:
+        description: 'Glob pattern for OpenAPI files to check'
+        type: string
+        default: 'api/**/openapi.yaml'
+      spectral-config:
+        description: 'Path to Spectral config file'
+        type: string
+        default: '.spectral.yaml'
+
+jobs:
+  check-aep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for relevant changes
+        uses: tj-actions/changed-files@v47
+        id: filter
+        with:
+          files: |
+            ${{ inputs.openapi-paths }}
+            ${{ inputs.spectral-config }}
+
+      - name: Install Spectral
+        if: steps.filter.outputs.any_changed == 'true'
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Check AEP compliance
+        if: steps.filter.outputs.any_changed == 'true'
+        run: spectral lint --fail-severity=warn ./${{ inputs.openapi-paths }}
+
+      - name: Skip
+        if: steps.filter.outputs.any_changed == 'false'
+        run: echo "No API changes, skipping AEP check"
