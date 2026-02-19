@@ -11,6 +11,10 @@ on:
         description: 'Path to Spectral config file'
         type: string
         default: '.spectral.yaml'
+      additional-watch-paths:
+        description: 'Extra paths that trigger the check (e.g. api/v1alpha1/servicetypes/**/*.yaml)'
+        type: string
+        default: ''
 
 jobs:
   check-aep:
@@ -25,6 +29,7 @@ jobs:
           files: |
             ${{ inputs.openapi-paths }}
             ${{ inputs.spectral-config }}
+            ${{ inputs.additional-watch-paths }}
 
       - name: Install Spectral
         if: steps.filter.outputs.any_changed == 'true'
