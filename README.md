@@ -55,13 +55,14 @@ jobs:
       quay-password: ${{ secrets.QUAY_PASSWORD }}
 ```
 
-**Required secrets** (in the calling repo or org): `QUAY_USERNAME`, `QUAY_PASSWORD`. For a [Quay robot account](https://docs.quay.io/glossary/robot-accounts.html): set `QUAY_USERNAME` to the robot name (e.g. `dcm-project+ci-push`) and `QUAY_PASSWORD` to the robot token; the example above is unchanged. Default registry is `quay.io/dcm-project`. To override (e.g. use another Quay org or a user namespace), pass the `registry` input:
+**Required secrets** (in the calling repo or org): `QUAY_USERNAME`, `QUAY_PASSWORD`. For a [Quay robot account](https://docs.quay.io/glossary/robot-accounts.html): set `QUAY_USERNAME` to the robot name (e.g. `dcm-project+ci-push`) and `QUAY_PASSWORD` to the robot token; the example above is unchanged. Default registry is `quay.io/dcm-project`. To override (e.g. use another Quay org or a user namespace), pass the `registry` input. Images are built for `linux/amd64` and `linux/arm64` by default; override with the `platforms` input if needed:
 
 ```yaml
     with:
       image-name: service-provider-manager
       registry: quay.io/your-org-or-username
       tags: ${{ github.ref_name }}
+      platforms: linux/amd64,linux/arm64  # optional, default shown
 ```
 
 ## License
