@@ -7,6 +7,10 @@ on:
         description: 'Base branch to compare against'
         type: string
         default: 'origin/main'
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   check-clean-commits:

@@ -34,37 +34,32 @@ See individual workflow files for available options and inputs.
 
 ### Build and push to Quay.io
 
-Use `build-push-quay.yaml` from manager repos that have a `Containerfile`. Add a workflow that runs on push to `main` (and optionally on version tags), and pass Quay credentials as secrets:
+Use `build-push-quay.yaml` from manager repos that have a `Containerfile`. Create `.github/workflows/build-push-quay.yaml`:
 
 ```yaml
-# .github/workflows/build-push.yaml
 name: Build and Push Image
 on:
   push:
     branches: [main]
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to push (e.g. v1.0.0). When set, only this tag is used.'
+        required: false
 
 jobs:
   build-push:
-    uses: dcm-project/shared-workflows/.github/workflows/build-push-quay.yaml@quay-publish
+    uses: dcm-project/shared-workflows/.github/workflows/build-push-quay.yaml@main
     with:
       image-name: service-provider-manager
-      tags: ${{ github.ref_name }}
+      version: ${{ github.event.inputs.version }}
     secrets:
       quay-username: ${{ secrets.QUAY_USERNAME }}
       quay-password: ${{ secrets.QUAY_PASSWORD }}
 ```
 
-**Required secrets** (in the calling repo or org): `QUAY_USERNAME`, `QUAY_PASSWORD`. For a [Quay robot account](https://docs.quay.io/glossary/robot-accounts.html): set `QUAY_USERNAME` to the robot name (e.g. `dcm-project+ci-push`) and `QUAY_PASSWORD` to the robot token; the example above is unchanged. Default registry is `quay.io/dcm-project`. To override (e.g. use another Quay org or a user namespace), pass the `registry` input. Images are built for `linux/amd64` and `linux/arm64` by default; override with the `platforms` input if needed:
+The shared workflow auto-computes tags (latest, sha-xxx, version on tag push). When `version` is passed (manual trigger), only that tag is pushed.
 
-```yaml
-    with:
-      image-name: service-provider-manager
-      registry: quay.io/your-org-or-username
-      tags: ${{ github.ref_name }}
-      platforms: linux/amd64,linux/arm64  # optional, default shown
-```
+**Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level). Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64` and `linux/arm64`; override with the `platforms` input if needed.
 
-## License
-
-Apache 2.0 - See [LICENSE](LICENSE)

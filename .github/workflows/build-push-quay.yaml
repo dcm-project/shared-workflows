@@ -16,9 +16,13 @@ on:
         type: string
         default: 'quay.io/dcm-project'
       tags:
-        description: 'Comma-separated tags to push (e.g. latest,main or v1.0.0)'
+        description: 'Comma-separated tags to push. When empty, auto-computes latest, sha-xxx, version. Ignored when version is set.'
         type: string
-        default: 'latest'
+        default: ''
+      version:
+        description: 'When set (e.g. manual trigger), use only this tag. Overrides tags.'
+        type: string
+        required: false
       dockerfile:
         description: 'Path to Dockerfile/Containerfile'
         type: string
@@ -67,9 +71,20 @@ jobs:
           REGISTRY: ${{ inputs.registry }}
           IMAGE_NAME: ${{ inputs.image-name }}
           TAGS_IN: ${{ inputs.tags }}
+          VERSION: ${{ inputs.version }}
         run: |
+          if [[ -n "$VERSION" ]]; then
+            TAGS="$VERSION"
+          elif [[ -n "$TAGS_IN" ]]; then
+            TAGS="$TAGS_IN"
+          else
+            TAGS="latest,sha-${GITHUB_SHA:0:7}"
+            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+              TAGS="${TAGS},${{ github.ref_name }}"
+            fi
+          fi
           echo "tags<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$TAGS_IN" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | while read -r t; do
+          echo "$TAGS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | while read -r t; do
             [ -n "$t" ] && echo "${REGISTRY}/${IMAGE_NAME}:${t}"
           done >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
