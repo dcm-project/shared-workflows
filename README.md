@@ -11,6 +11,7 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `check-generate.yaml` | Verify generated files are in sync | Repos with code generation |
 | `check-clean-commits.yaml` | Ensure PR commits are cleaned before merge | All repos |
 | `build-push-quay.yaml` | Build container image and push to Quay.io | Manager repos (Containerfile) |
+| `gateway-contract-test.yaml` | Validate KrakenD gateway routes against backend OpenAPI specs | api-gateway and backend repos |
 
 ## Usage
 
