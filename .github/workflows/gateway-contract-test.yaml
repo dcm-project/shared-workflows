@@ -1,0 +1,107 @@
+name: Gateway Contract Test
+
+on:
+  workflow_call:
+    inputs:
+      krakend-repo:
+        description: 'Repo containing krakend.json (owner/repo). Empty = calling repo.'
+        type: string
+        default: ''
+      krakend-ref:
+        description: 'Git ref when fetching krakend.json from external repo'
+        type: string
+        default: 'main'
+      krakend-config:
+        description: 'Path to krakend.json within the repo'
+        type: string
+        default: 'config/krakend.json'
+      override-spec:
+        description: 'Override a service spec with local file: hostname=path/to/spec.yaml'
+        type: string
+        default: ''
+      service:
+        description: 'Only validate routes for this service hostname'
+        type: string
+        default: ''
+      warn-uncovered:
+        description: 'Warn about spec paths not covered by gateway routes'
+        type: boolean
+        default: false
+      watch-paths:
+        description: 'Paths that trigger the contract test (newline-separated globs)'
+        type: string
+        default: |
+          config/krakend.json
+          config/krakend.json.tmpl
+          api/**/openapi.yaml
+
+jobs:
+  contract-test:
+    name: Contract test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout calling repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        uses: tj-actions/changed-files@v47
+        with:
+          files: ${{ inputs.watch-paths }}
+
+      - name: Checkout shared-workflows
+        if: steps.changes.outputs.any_changed == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: dcm-project/shared-workflows
+          ref: main
+          path: .shared-workflows
+
+      - name: Checkout krakend repo
+        if: steps.changes.outputs.any_changed == 'true' && inputs.krakend-repo != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.krakend-repo }}
+          ref: ${{ inputs.krakend-ref }}
+          path: .krakend-repo
+
+      - name: Install dependencies
+        if: steps.changes.outputs.any_changed == 'true'
+        run: pip install pyyaml
+
+      - name: Run contract test
+        if: steps.changes.outputs.any_changed == 'true'
+        env:
+          INPUT_KRAKEND_REPO: ${{ inputs.krakend-repo }}
+          INPUT_KRAKEND_CONFIG: ${{ inputs.krakend-config }}
+          INPUT_WARN_UNCOVERED: ${{ inputs.warn-uncovered }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          INPUT_OVERRIDE_SPEC: ${{ inputs.override-spec }}
+        run: |
+          if [ -n "${INPUT_KRAKEND_REPO}" ]; then
+            CONFIG="${GITHUB_WORKSPACE}/.krakend-repo/${INPUT_KRAKEND_CONFIG}"
+          else
+            CONFIG="${GITHUB_WORKSPACE}/${INPUT_KRAKEND_CONFIG}"
+          fi
+
+          FLAGS=""
+          if [ "${INPUT_WARN_UNCOVERED}" = "true" ]; then
+            FLAGS="${FLAGS} --warn-uncovered"
+          fi
+          if [ -n "${INPUT_SERVICE}" ]; then
+            FLAGS="${FLAGS} --service ${INPUT_SERVICE}"
+          fi
+          if [ -n "${INPUT_OVERRIDE_SPEC}" ]; then
+            SPEC="${INPUT_OVERRIDE_SPEC}"
+            HOST="${SPEC%%=*}"
+            PATH_PART="${SPEC#*=}"
+            FLAGS="${FLAGS} --override ${HOST}=${GITHUB_WORKSPACE}/${PATH_PART}"
+          fi
+
+          python3 .shared-workflows/hack/gateway-contract-test.py --config "${CONFIG}" ${FLAGS}
+
+      - name: Skip notice
+        if: steps.changes.outputs.any_changed != 'true'
+        run: echo "No relevant file changes detected, skipping contract test."
