@@ -43,13 +43,12 @@ def extract_base_path(spec: dict) -> str:
     return ""
 
 
-def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str], int]:
+def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str]]:
     """Parse an OpenAPI/Swagger spec and return operations and paths.
 
     Returns:
         operations: set of "METHOD /normalized/path" strings
         all_paths: set of all normalized paths (for uncovered warnings)
-        count: number of operations found
     """
     operations = set()
     all_paths = set()
@@ -57,7 +56,7 @@ def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str], i
 
     paths = spec.get("paths", {})
     if not paths:
-        return operations, all_paths, 0
+        return operations, all_paths
 
     base_path = extract_base_path(spec)
 
@@ -85,7 +84,7 @@ def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str], i
         print("  WARN  spec contains unresolved $ref entries; results may be incomplete",
               file=sys.stderr)
 
-    return operations, all_paths, len(operations)
+    return operations, all_paths
 
 
 def download_spec(url: str) -> dict:
@@ -291,16 +290,16 @@ def main() -> int:
             elif openapi_ver:
                 print(f"    detected: OpenAPI {openapi_ver}")
 
-        operations, all_paths, count = parse_spec(spec, verbose=args.verbose)
+        operations, all_paths = parse_spec(spec, verbose=args.verbose)
 
-        if count == 0:
+        if len(operations) == 0:
             print(f"Error: service {svc_name}: spec contains no operations "
                   "(0 paths with HTTP methods)", file=sys.stderr)
             return 2
 
         spec_ops[svc_name] = operations
         spec_all_paths[svc_name] = all_paths
-        print(f"  {svc_name}: OK ({count} operations)")
+        print(f"  {svc_name}: OK ({len(operations)} operations)")
 
     # Extract and validate routes
     routes = extract_routes(config, args.service, args.verbose)
