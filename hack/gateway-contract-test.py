@@ -6,11 +6,13 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlopen
 from urllib.error import URLError
 
 import yaml
+import jsonref
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 
@@ -52,7 +54,6 @@ def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str]]:
     """
     operations = set()
     all_paths = set()
-    has_ref = False
 
     paths = spec.get("paths", {})
     if not paths:
@@ -65,7 +66,6 @@ def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str]]:
             continue
         for method, operation in path_item.items():
             if method == "$ref":
-                has_ref = True
                 continue
             if method.lower() not in HTTP_METHODS:
                 continue
@@ -79,10 +79,6 @@ def parse_spec(spec: dict, verbose: bool = False) -> tuple[set[str], set[str]]:
 
             if verbose:
                 print(f"    spec: {key}")
-
-    if has_ref:
-        print("  WARN  spec contains unresolved $ref entries; results may be incomplete",
-              file=sys.stderr)
 
     return operations, all_paths
 
@@ -111,6 +107,33 @@ def load_spec(path: str) -> dict:
         raise SystemExit(f"Error: file not found: {path}")
     except yaml.YAMLError as exc:
         raise SystemExit(f"Error: invalid YAML in {path}: {exc}")
+
+
+def _yaml_loader(uri: str) -> dict:
+    """Load a document from a file or HTTP URI and parse as YAML (or JSON)."""
+    try:
+        with urlopen(uri, timeout=30) as response:
+            data = response.read()
+    except (URLError, OSError) as exc:
+        raise jsonref.JsonRefError(f"Failed to load {uri}: {exc}", None, uri=uri) from exc
+    try:
+        return yaml.safe_load(data)
+    except yaml.YAMLError as exc:
+        raise jsonref.JsonRefError(f"Invalid YAML/JSON in {uri}: {exc}", None, uri=uri) from exc
+
+
+def resolve_refs(spec: dict, base_uri: str) -> dict:
+    """Resolve $ref in the spec so path items and operations are inlined. Returns a new dict.
+
+    base_uri must be the spec's location (absolute file URI or URL) so relative $ref
+    (e.g. ./schemas/common.yaml) resolve correctly.
+    """
+    return jsonref.replace_refs(
+        spec,
+        base_uri=base_uri,
+        loader=_yaml_loader,
+        proxies=False,
+    )
 
 
 @dataclass
@@ -275,12 +298,21 @@ def main() -> int:
         if svc_name in overrides:
             print(f"  {svc_name}: loading from local file {overrides[svc_name]}")
             spec = load_spec(overrides[svc_name])
+            # Resolve to absolute so relative $ref in the spec resolve against the file's location.
+            base_uri = Path(overrides[svc_name]).resolve().as_uri()
         else:
             spec_url = contract_specs[svc_name].get("openapi_url", "")
             if not spec_url:
                 print(f"Error: service {svc_name}: openapi_url is empty", file=sys.stderr)
                 return 2
             spec = download_spec(spec_url)
+            base_uri = spec_url
+
+        try:
+            spec = resolve_refs(spec, base_uri)
+        except jsonref.JsonRefError as exc:
+            print(f"Error: service {svc_name}: failed to resolve $ref: {exc}", file=sys.stderr)
+            return 2
 
         if args.verbose:
             swagger_ver = spec.get("swagger")
