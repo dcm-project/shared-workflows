@@ -1,0 +1,68 @@
+name: Black Box Tests
+
+on:
+  workflow_call:
+    inputs:
+      up-target:
+        description: 'Make target to run to start services'
+        type: string
+      test-target:
+        description: 'Make target to run to run tests'
+        type: string
+      down-target:
+        description: 'Make target to run to stop services'
+        type: string
+      go-version-file:
+        description: 'Path to go.mod file for Go version'
+        type: string
+        default: 'go.mod'
+      images:
+        description: 'Space-separated list of images to pre-pull'
+        type: string
+        default: ''
+
+jobs:
+  blackbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+
+      - name: Install podman-compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+          pip install podman-compose
+
+      - name: Pre-pull container images
+        if: inputs.images != ''
+        run: |
+          for img in ${{ inputs.images }}; do
+            for i in 1 2 3; do
+              podman pull "$img" && break
+              [ $i -eq 3 ] && exit 1
+              echo "Pull failed, retrying in 15s..."
+              sleep 15
+            done
+          done
+
+      - name: Start services
+        run: make ${{ inputs.up-target }}
+
+      - name: Run tests
+        run: make ${{ inputs.test-target }}
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          podman-compose logs
+
+      - name: Stop services
+        if: always()
+        run: make ${{ inputs.down-target }}
