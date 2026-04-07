@@ -85,11 +85,10 @@ jobs:
               echo "::error::VERSION file not found or empty on release branch"
               exit 1
             fi
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAGS="${GITHUB_SHA:0:7},${{ github.ref_name }}"
           else
             TAGS="latest,sha-${GITHUB_SHA:0:7}"
-            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-              TAGS="${TAGS},${{ github.ref_name }}"
-            fi
           fi
           echo "tags<<EOF" >> "$GITHUB_OUTPUT"
           echo "$TAGS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | while read -r t; do

@@ -66,7 +66,7 @@ jobs:
 |---|---|---|
 | Push to `main` | `latest`, `sha-<7chars>` | `:latest`, `:sha-abc1234` |
 | Push to `release/v*` branch | Value from `VERSION` file, `<short-sha>` | `:v0.0.1-rc.3`, `:a6882f7` |
-| Push of `v*` git tag | `latest`, `sha-<7chars>`, tag name | `:latest`, `:sha-abc1234`, `:v0.0.1` |
+| Push of `v*` git tag | `<short-sha>`, tag name | `:a6882f7`, `:v0.0.1` |
 | Manual dispatch with `version` | Only the specified tag | `:v0.0.1` |
 
 #### Release candidate (RC) flow
