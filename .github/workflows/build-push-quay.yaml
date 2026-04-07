@@ -77,6 +77,14 @@ jobs:
             TAGS="$VERSION"
           elif [[ -n "$TAGS_IN" ]]; then
             TAGS="$TAGS_IN"
+          elif [[ "${{ github.ref }}" == refs/heads/release/v* ]]; then
+            RC_VERSION=$(cat VERSION 2>/dev/null || echo "")
+            if [[ -n "$RC_VERSION" ]]; then
+              TAGS="${RC_VERSION},${GITHUB_SHA:0:7}"
+            else
+              echo "::error::VERSION file not found or empty on release branch"
+              exit 1
+            fi
           else
             TAGS="latest,sha-${GITHUB_SHA:0:7}"
             if [[ "${{ github.ref }}" == refs/tags/* ]]; then

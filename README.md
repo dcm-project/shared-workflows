@@ -60,7 +60,35 @@ jobs:
       quay-password: ${{ secrets.QUAY_PASSWORD }}
 ```
 
-The shared workflow auto-computes tags (latest, sha-xxx, version on tag push). When `version` is passed (manual trigger), only that tag is pushed.
+#### Tag behavior
+
+| Trigger | Image tags | Example |
+|---|---|---|
+| Push to `main` | `latest`, `sha-<7chars>` | `:latest`, `:sha-abc1234` |
+| Push to `release/v*` branch | Value from `VERSION` file, `<short-sha>` | `:v0.0.1-rc.3`, `:a6882f7` |
+| Push of `v*` git tag | `latest`, `sha-<7chars>`, tag name | `:latest`, `:sha-abc1234`, `:v0.0.1` |
+| Manual dispatch with `version` | Only the specified tag | `:v0.0.1` |
+
+#### Release candidate (RC) flow
+
+For `release/v*` branches, the workflow reads a `VERSION` file from the repo root and uses its content
+as an image tag (alongside the short commit SHA). This supports an RC workflow:
+
+1. Create a `release/v*` branch and add or update the `VERSION` file (e.g. `v0.0.1-rc.1`)
+2. Each push rebuilds the image with the tag from `VERSION` + the commit SHA
+3. Bump the `VERSION` file for each new RC (`v0.0.1-rc.2`, `v0.0.1-rc.3`, ...)
+4. After QE approval, create a git tag (`v0.0.1`) on the approved commit for the final release
+
+The `VERSION` file is required on `release/v*` branches -- the build will fail if it is missing or empty.
+
+Callers must include `'release/v*'` in their branch triggers to enable this:
+
+```yaml
+on:
+  push:
+    branches: [main, 'release/v*']
+    tags: ['v*']
+```
 
 **Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level). Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64` and `linux/arm64`; override with the `platforms` input if needed.
 
