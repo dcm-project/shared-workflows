@@ -41,7 +41,7 @@ Use `build-push-quay.yaml` from manager repos that have a `Containerfile`. Creat
 name: Build and Push Image
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/v*']
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -64,31 +64,48 @@ jobs:
 
 | Trigger | Image tags | Example |
 |---|---|---|
-| Push to `main` | `latest`, `sha-<7chars>` | `:latest`, `:sha-abc1234` |
-| Push to `release/v*` branch | Value from `VERSION` file, `<short-sha>` | `:v0.0.1-rc.3`, `:a6882f7` |
-| Push of `v*` git tag | `<short-sha>`, tag name | `:a6882f7`, `:v0.0.1` |
+| Push to `main` | `main`, `<short-sha>` | `:main`, `:a6882f7` |
+| Push to `release/v*` branch | `<short-sha>` | `:a6882f7` |
+| Push of `v*` git tag | `<short-sha>`, tag name | `:a6882f7`, `:v0.0.1`, `:v0.0.1-rc.1` |
 | Manual dispatch with `version` | Only the specified tag | `:v0.0.1` |
 
-#### Release candidate (RC) flow
+`main` tag is only produced by pushes to the `main` branch. Version branch and git tag pushes do not update it.
 
-For `release/v*` branches, the workflow reads a `VERSION` file from the repo root and uses its content
-as an image tag (alongside the short commit SHA). This supports an RC workflow:
+#### Release flow
 
-1. Create a `release/v*` branch and add or update the `VERSION` file (e.g. `v0.0.1-rc.1`)
-2. Each push rebuilds the image with the tag from `VERSION` + the commit SHA
-3. Bump the `VERSION` file for each new RC (`v0.0.1-rc.2`, `v0.0.1-rc.3`, ...)
-4. After QE approval, create a git tag (`v0.0.1`) on the approved commit for the final release
+1. **Development happens on `main`** -- every merge triggers a build tagged `main` and `<short-sha>`.
 
-The `VERSION` file is required on `release/v*` branches -- the build will fail if it is missing or empty.
+2. **Create a release branch** prefixed with `release/`:
+   ```bash
+   git checkout -b release/v0.0.1
+   git push -u origin release/v0.0.1
+   ```
 
-Callers must include `'release/v*'` in their branch triggers to enable this:
+3. **Push fixes** to the release branch. Each push triggers CI, producing a `<short-sha>` image:
+   ```bash
+   git checkout release/v0.0.1
+   # ... commit fixes ...
+   git push origin release/v0.0.1
+   ```
+4. **QE validates** against the RC tag. If issues are found, 
+   push fixes to the release branch (step 3) and cut the next RC (step 4).
 
-```yaml
-on:
-  push:
-    branches: [main, 'release/v*']
-    tags: ['v*']
-```
+5. **Tag the final release** on the approved commit using the same script:
+   ```bash
+   ./hack/tag-release.sh v0.0.1
+   ```
+   CI builds the image with tags `v0.0.1` and `<short-sha>` for each service.
+
+6. **Cherry-pick** bug fixes from the release branch into `main` (if not already in main),
+   so that issues caught during stabilization are propagated into main.
+
+7. **For the next release**, create a new branch (e.g. `release/v0.0.2` or `release/v0.1.0`) and repeat from step 2.
+
+#### Version convention
+
+Follow [Semantic Versioning](https://semver.org/): `vMAJOR.MINOR.PATCH` (e.g. `v0.0.1`, `v1.2.0`). 
+All version identifiers must start with `v`. Release branches use the `release/` prefix (e.g. `release/v0.0.1`). 
+Both release candidates (`v0.0.1-rc.1`) and final releases (`v0.0.1`) are git-tagged.
 
 **Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level). Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64` and `linux/arm64`; override with the `platforms` input if needed.
 
