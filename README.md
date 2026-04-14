@@ -11,6 +11,7 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `check-generate.yaml` | Verify generated files are in sync | Repos with code generation |
 | `check-clean-commits.yaml` | Ensure PR commits are cleaned before merge | All repos |
 | `build-push-quay.yaml` | Build container image and push to Quay.io | Manager repos (Containerfile) |
+| `tag-release.yaml` | Git-tag all service repos with a release or RC version | shared-workflows (manual dispatch) |
 | `gateway-contract-test.yaml` | Validate KrakenD gateway routes against backend OpenAPI specs | api-gateway and backend repos |
 
 ## Usage
@@ -87,19 +88,27 @@ jobs:
    # ... commit fixes ...
    git push origin release/v0.0.1
    ```
-4. **QE validates** against the RC tag. If issues are found, 
+
+4. **(Optional) Tag a release candidate**. Use the [script](https://github.com/dcm-project/shared-workflows/blob/main/hack/tag-release.sh) 
+   to git-tag all service repos at once from their release branch HEAD:
+   ```bash
+   ./hack/tag-release.sh v0.0.1-rc.1
+   ```
+   Each git tag push triggers CI, which builds the image with tags `v0.0.1-rc.1` and `<short-sha>`.
+
+5. **QE validates** against the RC tag. If issues are found, 
    push fixes to the release branch (step 3) and cut the next RC (step 4).
 
-5. **Tag the final release** on the approved commit using the same script:
+6. **Tag the final release** on the approved commit using the same script:
    ```bash
    ./hack/tag-release.sh v0.0.1
    ```
    CI builds the image with tags `v0.0.1` and `<short-sha>` for each service.
 
-6. **Cherry-pick** bug fixes from the release branch into `main` (if not already in main),
+7. **Cherry-pick** bug fixes from the release branch into `main` (if not already in main),
    so that issues caught during stabilization are propagated into main.
 
-7. **For the next release**, create a new branch (e.g. `release/v0.0.2` or `release/v0.1.0`) and repeat from step 2.
+8. **For the next release**, create a new branch (e.g. `release/v0.0.2` or `release/v0.1.0`) and repeat from step 2.
 
 #### Version convention
 
@@ -108,6 +117,41 @@ All version identifiers must start with `v`. Release branches use the `release/`
 Both release candidates (`v0.0.1-rc.1`) and final releases (`v0.0.1`) are git-tagged.
 
 **Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level). Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64` and `linux/arm64`; override with the `platforms` input if needed.
+
+#### Release tagging
+
+Use `tag-release.yaml` to git-tag all service repos at once from their release branch HEAD.
+Each tag push triggers CI, which builds and pushes the image. This works for both RC tags and final releases.
+
+**GitHub workflow** -- trigger via the Actions UI (shared-workflows -> Actions -> "Tag Release" -> Run workflow) or the CLI:
+
+```bash
+gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
+  -f tag=v0.0.1-rc.1
+
+gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
+  -f tag=v0.0.1-rc.2 \
+  -f services="placement-manager catalog-manager"
+
+gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
+  -f tag=v0.0.1
+```
+
+| Input | Required | Description |
+|---|---|---|
+| `tag` | Yes | Version tag to create (e.g. `v0.0.1-rc.1` or `v0.0.1`) |
+| `services` | No | Space-separated services to tag (default: all DCM services) |
+
+**Local script** (`hack/tag-release.sh` in this repo):
+
+```bash
+./hack/tag-release.sh v0.0.1-rc.1                          # tag all services
+./hack/tag-release.sh v0.0.1-rc.2 placement-manager catalog-manager  # specific services only
+./hack/tag-release.sh v0.0.1                                # final release
+```
+
+The script resolves the HEAD of the release branch (derived from the tag: `v0.0.1-rc.1` or `v0.0.1` -> branch `release/v0.0.1`) 
+for each service repo via `gh api`, creates an annotated git tag at that commit, and pushes it.
 
 ### Gateway contract test
 

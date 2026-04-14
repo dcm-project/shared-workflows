@@ -1,0 +1,37 @@
+# Tag all DCM service repos with a release or RC version.
+#
+# Checks out this repo and runs hack/tag-release.sh, which resolves the HEAD
+# SHA of each service's release branch via GitHub API and creates an annotated
+# git tag. Each tag push triggers CI to build and push the image.
+
+name: Tag Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to create (e.g. v0.0.1-rc.1 or v0.0.1)'
+        required: true
+      services:
+        description: 'Space-separated services to tag (default: all DCM services)'
+        required: false
+        default: ''
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Tag services
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARGS=("${{ inputs.tag }}")
+
+          for svc in ${{ inputs.services }}; do
+            ARGS+=("$svc")
+          done
+
+          ./hack/tag-release.sh "${ARGS[@]}"
