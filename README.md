@@ -41,7 +41,7 @@ Use `build-push-quay.yaml` from manager repos that have a `Containerfile`. Creat
 name: Build and Push Image
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/v*']
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -60,7 +60,52 @@ jobs:
       quay-password: ${{ secrets.QUAY_PASSWORD }}
 ```
 
-The shared workflow auto-computes tags (latest, sha-xxx, version on tag push). When `version` is passed (manual trigger), only that tag is pushed.
+#### Tag behavior
+
+| Trigger | Image tags | Example |
+|---|---|---|
+| Push to `main` | `main`, `<short-sha>` | `:main`, `:a6882f7` |
+| Push to `release/v*` branch | `<short-sha>` | `:a6882f7` |
+| Push of `v*` git tag | `<short-sha>`, tag name | `:a6882f7`, `:v0.0.1`, `:v0.0.1-rc.1` |
+| Manual dispatch with `version` | Only the specified tag | `:v0.0.1` |
+
+`main` tag is only produced by pushes to the `main` branch. Version branch and git tag pushes do not update it.
+
+#### Release flow
+
+1. **Development happens on `main`** -- every merge triggers a build tagged `main` and `<short-sha>`.
+
+2. **Create a release branch** prefixed with `release/`:
+   ```bash
+   git checkout -b release/v0.0.1
+   git push -u origin release/v0.0.1
+   ```
+
+3. **Push fixes** to the release branch. Each push triggers CI, producing a `<short-sha>` image:
+   ```bash
+   git checkout release/v0.0.1
+   # ... commit fixes ...
+   git push origin release/v0.0.1
+   ```
+4. **QE validates** against the RC tag. If issues are found, 
+   push fixes to the release branch (step 3) and cut the next RC (step 4).
+
+5. **Tag the final release** on the approved commit using the same script:
+   ```bash
+   ./hack/tag-release.sh v0.0.1
+   ```
+   CI builds the image with tags `v0.0.1` and `<short-sha>` for each service.
+
+6. **Cherry-pick** bug fixes from the release branch into `main` (if not already in main),
+   so that issues caught during stabilization are propagated into main.
+
+7. **For the next release**, create a new branch (e.g. `release/v0.0.2` or `release/v0.1.0`) and repeat from step 2.
+
+#### Version convention
+
+Follow [Semantic Versioning](https://semver.org/): `vMAJOR.MINOR.PATCH` (e.g. `v0.0.1`, `v1.2.0`). 
+All version identifiers must start with `v`. Release branches use the `release/` prefix (e.g. `release/v0.0.1`). 
+Both release candidates (`v0.0.1-rc.1`) and final releases (`v0.0.1`) are git-tagged.
 
 **Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level). Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64` and `linux/arm64`; override with the `platforms` input if needed.
 
