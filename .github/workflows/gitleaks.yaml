@@ -1,0 +1,101 @@
+name: Gitleaks Secret Scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-mode:
+        description: 'Scan scope: diff (PR commits), push (pushed commits), or full (entire history)'
+        type: string
+        required: true
+      base-sha:
+        description: 'Start of commit range (required for diff and push modes)'
+        type: string
+        default: ''
+      head-sha:
+        description: 'End of commit range (required for diff and push modes)'
+        type: string
+        default: ''
+      gitleaks-version:
+        description: 'Gitleaks version to install'
+        type: string
+        default: '8.22.1'
+      upload-sarif:
+        description: 'Upload SARIF to GitHub Code Scanning (set false for full-history artifact upload)'
+        type: boolean
+        default: true
+      artifact-name:
+        description: 'Artifact name when upload-sarif is false'
+        type: string
+        default: 'gitleaks-report'
+      artifact-retention-days:
+        description: 'Artifact retention in days'
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: >-
+      ${{ inputs.scan-mode == 'diff' && 'Scan PR for secrets' ||
+          inputs.scan-mode == 'push' && 'Scan push for secrets' ||
+          'Full history secret scan' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        if: inputs.scan-mode == 'diff' || inputs.scan-mode == 'push'
+        env:
+          BASE_SHA: ${{ inputs.base-sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          if [ -z "${BASE_SHA}" ] || [ -z "${HEAD_SHA}" ]; then
+            echo "::error::base-sha and head-sha are required for scan-mode '${{ inputs.scan-mode }}'"
+            exit 1
+          fi
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
+        run: |
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+
+      - name: Run gitleaks scan
+        env:
+          SCAN_MODE: ${{ inputs.scan-mode }}
+          BASE_SHA: ${{ inputs.base-sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          LOG_OPTS=""
+          if [ "${SCAN_MODE}" != "full" ]; then
+            LOG_OPTS="--log-opts=${BASE_SHA}..${HEAD_SHA}"
+          fi
+          gitleaks git \
+            ${LOG_OPTS} \
+            --report-format sarif \
+            --report-path gitleaks-report.sarif \
+            --redact \
+            --verbose
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always() && inputs.upload-sarif
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
+        with:
+          sarif_file: gitleaks-report.sarif
+
+      - name: Upload report artifact
+        if: always() && !inputs.upload-sarif
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: gitleaks-report.sarif
+          retention-days: ${{ inputs.artifact-retention-days }}
