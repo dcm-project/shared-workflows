@@ -19,6 +19,10 @@ on:
         description: 'Gitleaks version to install'
         type: string
         default: '8.22.1'
+      config-path:
+        description: 'Path to a repo-specific .gitleaks.toml config file'
+        type: string
+        default: ''
       upload-sarif:
         description: 'Upload SARIF to GitHub Code Scanning (set false for full-history artifact upload)'
         type: boolean
@@ -60,29 +64,37 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
+          cache: false
+
       - name: Install gitleaks
         env:
           GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
-        run: |
-          curl -sSfL \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v${GITLEAKS_VERSION}
 
       - name: Run gitleaks scan
         env:
           SCAN_MODE: ${{ inputs.scan-mode }}
           BASE_SHA: ${{ inputs.base-sha }}
           HEAD_SHA: ${{ inputs.head-sha }}
+          CONFIG_PATH: ${{ inputs.config-path }}
         run: |
           LOG_OPTS=""
           if [ "${SCAN_MODE}" != "full" ]; then
             LOG_OPTS="--log-opts=${BASE_SHA}..${HEAD_SHA}"
           fi
+          CONFIG_OPT=""
+          if [ -n "${CONFIG_PATH}" ]; then
+            CONFIG_OPT="--config=${CONFIG_PATH}"
+          fi
           gitleaks git \
             ${LOG_OPTS} \
+            ${CONFIG_OPT} \
             --report-format sarif \
             --report-path gitleaks-report.sarif \
-            --redact \
             --verbose
 
       - name: Upload SARIF to GitHub Code Scanning
