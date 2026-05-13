@@ -1,0 +1,121 @@
+name: Gitleaks Secret Scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-mode:
+        description: 'Scan scope: diff (PR commits), push (pushed commits), or full (entire history)'
+        type: string
+        required: true
+      base-sha:
+        description: 'Start of commit range (required for diff and push modes)'
+        type: string
+        default: ''
+      head-sha:
+        description: 'End of commit range (required for diff and push modes)'
+        type: string
+        default: ''
+      go-version-file:
+        description: 'Path to go.mod file for Go version (leave empty for non-Go repos)'
+        type: string
+        default: ''
+      config-path:
+        description: 'Path to a repo-specific .gitleaks.toml config file'
+        type: string
+        default: ''
+      upload-sarif:
+        description: 'Upload SARIF to GitHub Code Scanning (set false for full-history artifact upload)'
+        type: boolean
+        default: true
+      artifact-name:
+        description: 'Artifact name when upload-sarif is false'
+        type: string
+        default: 'gitleaks-report'
+      artifact-retention-days:
+        description: 'Artifact retention in days'
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: >-
+      ${{ inputs.scan-mode == 'diff' && 'Scan PR for secrets' ||
+          inputs.scan-mode == 'push' && 'Scan push for secrets' ||
+          'Full history secret scan' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate inputs
+        if: inputs.scan-mode == 'diff' || inputs.scan-mode == 'push'
+        env:
+          BASE_SHA: ${{ inputs.base-sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          if [ -z "${BASE_SHA}" ] || [ -z "${HEAD_SHA}" ]; then
+            echo "::error::base-sha and head-sha are required for scan-mode '${{ inputs.scan-mode }}'"
+            exit 1
+          fi
+
+      - name: Set up Go
+        if: inputs.go-version-file == ''
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: false  # Single binary install; no project dependencies to cache
+
+      - name: Set up Go (from version file)
+        if: inputs.go-version-file != ''
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: false  # Single binary install; no project dependencies to cache
+
+      - name: Install gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v8.22.1
+
+      - name: Run gitleaks scan
+        env:
+          SCAN_MODE: ${{ inputs.scan-mode }}
+          BASE_SHA: ${{ inputs.base-sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+          CONFIG_PATH: ${{ inputs.config-path }}
+        run: |
+          LOG_OPTS=""
+          if [ "${SCAN_MODE}" != "full" ]; then
+            LOG_OPTS="--log-opts=${BASE_SHA}..${HEAD_SHA}"
+          fi
+          CONFIG_OPT=""
+          if [ -n "${CONFIG_PATH}" ]; then
+            CONFIG_OPT="--config=${CONFIG_PATH}"
+          fi
+          # SARIF integrates with GitHub Code Scanning (Security tab + PR annotations)
+          gitleaks git \
+            ${LOG_OPTS} \
+            ${CONFIG_OPT} \
+            --report-format sarif \
+            --report-path gitleaks-report.sarif \
+            --redact \
+            --verbose
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always() && inputs.upload-sarif
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
+        with:
+          sarif_file: gitleaks-report.sarif
+
+      - name: Upload report artifact
+        if: always() && !inputs.upload-sarif
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: gitleaks-report.sarif
+          retention-days: ${{ inputs.artifact-retention-days }}

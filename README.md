@@ -13,6 +13,7 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `build-push-quay.yaml` | Build container image and push to Quay.io | Manager repos (Containerfile) |
 | `tag-release.yaml` | Git-tag all service repos with a release or RC version | shared-workflows (manual dispatch) |
 | `gateway-contract-test.yaml` | Validate KrakenD gateway routes against backend OpenAPI specs | api-gateway and backend repos |
+| `gitleaks.yaml` | Scan for leaked secrets using gitleaks | All repos |
 
 ## Usage
 
@@ -208,4 +209,63 @@ jobs:
 `override-spec` is `hostname=path/to/openapi.yaml` (path relative to the manager repo root). `service` limits validation to that backend.
 
 **Key inputs:** `krakend-repo`, `krakend-config`, `override-spec`, `service`, `warn-uncovered`, `watch-paths`. See the workflow file for the full list.
+
+### Gitleaks secret scanning
+
+Use `gitleaks.yaml` to scan for leaked secrets. It supports three scan modes: **diff** (PR commits), **push** (pushed commits), and **full** (entire history). Results are reported in SARIF format and uploaded to GitHub Code Scanning by default, so findings appear in the repository Security tab and as inline PR annotations.
+
+**Pull request scanning** -- create `.github/workflows/gitleaks.yaml`:
+
+```yaml
+name: Gitleaks
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  gitleaks:
+    uses: dcm-project/shared-workflows/.github/workflows/gitleaks.yaml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      scan-mode: diff
+      base-sha: ${{ github.event.pull_request.base.sha }}
+      head-sha: ${{ github.event.pull_request.head.sha }}
+```
+
+**Push scanning:**
+
+```yaml
+name: Gitleaks
+on:
+  push:
+    branches: [main]
+
+jobs:
+  gitleaks:
+    uses: dcm-project/shared-workflows/.github/workflows/gitleaks.yaml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      scan-mode: push
+      base-sha: ${{ github.event.before }}
+      head-sha: ${{ github.sha }}
+```
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `scan-mode` | string | *(required)* | `diff`, `push`, or `full` |
+| `base-sha` | string | `''` | Start of commit range (required for diff/push) |
+| `head-sha` | string | `''` | End of commit range (required for diff/push) |
+| `go-version-file` | string | `''` | Path to go.mod for Go version (leave empty for non-Go repos; defaults to Go 1.25.5) |
+| `config-path` | string | `''` | Path to a repo-specific `.gitleaks.toml` |
+| `upload-sarif` | boolean | `true` | Upload SARIF to GitHub Code Scanning |
+| `artifact-name` | string | `'gitleaks-report'` | Artifact name when `upload-sarif` is false |
+| `artifact-retention-days` | number | `90` | Artifact retention in days |
+
+**Custom config:** To override gitleaks rules, add a `.gitleaks.toml` to your repo and pass its path via `config-path`. When empty, gitleaks uses its built-in ruleset.
+
+**SARIF integration:** Results use [SARIF](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning) format and are uploaded to GitHub Code Scanning via `github/codeql-action/upload-sarif@v4`. This makes findings visible in the repository's Security tab and as inline PR annotations, consistent with other GitHub security tooling. For full-history scans, set `upload-sarif: false` to download the report as a workflow artifact instead.
 
