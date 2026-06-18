@@ -10,9 +10,8 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `check-aep.yaml` | Validate OpenAPI specs against AEP standards | Repos with OpenAPI |
 | `check-generate.yaml` | Verify generated files are in sync | Repos with code generation |
 | `check-clean-commits.yaml` | Ensure PR commits are cleaned before merge | All repos |
-| `build-push-quay.yaml` | Build container image and push to Quay.io | Manager repos (Containerfile) |
+| `build-push-quay.yaml` | Build container image and push to Quay.io | DCM repos with a Containerfile |
 | `tag-release.yaml` | Git-tag all service repos with a release or RC version | shared-workflows (manual dispatch) |
-| `gateway-contract-test.yaml` | Validate KrakenD gateway routes against backend OpenAPI specs | api-gateway and backend repos |
 | `gitleaks.yaml` | Scan for leaked secrets using gitleaks | All repos |
 
 ## Usage
@@ -37,7 +36,7 @@ See individual workflow files for available options and inputs.
 
 ### Build and push to Quay.io
 
-Use `build-push-quay.yaml` from manager repos that have a `Containerfile`. Create `.github/workflows/build-push-quay.yaml`:
+Use `build-push-quay.yaml` from DCM repos that have a `Containerfile`. Create `.github/workflows/build-push-quay.yaml`:
 
 ```yaml
 name: Build and Push Image
@@ -55,11 +54,11 @@ jobs:
   build-push:
     uses: dcm-project/shared-workflows/.github/workflows/build-push-quay.yaml@main
     with:
-      image-name: service-provider-manager
+      image-name: control-plane
       version: ${{ github.event.inputs.version }}
     secrets:
       quay-username: ${{ secrets.QUAY_USERNAME }}
-      quay-password: ${{ secrets.QUAY_PASSWORD }}
+      quay-password: ${{ secrets.QUAY_TOKEN }}
 ```
 
 #### Tag behavior
@@ -132,7 +131,7 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1-rc.2 \
-  -f services="placement-manager catalog-manager"
+  -f services="control-plane kubevirt-service-provider"
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1
@@ -147,68 +146,12 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 
 ```bash
 ./hack/tag-release.sh v0.0.1-rc.1                          # tag all services
-./hack/tag-release.sh v0.0.1-rc.2 placement-manager catalog-manager  # specific services only
+./hack/tag-release.sh v0.0.1-rc.2 control-plane kubevirt-service-provider  # specific services only
 ./hack/tag-release.sh v0.0.1                                # final release
 ```
 
 The script resolves the HEAD of the release branch (derived from the tag: `v0.0.1-rc.1` or `v0.0.1` -> branch `release/v0.0.1`) 
 for each service repo via `gh api`, creates an annotated git tag at that commit, and pushes it.
-
-### Gateway contract test
-
-Use `gateway-contract-test.yaml` from the **api-gateway** repo to validate that KrakenD routes match backend OpenAPI specs, and from **manager** repos to validate that a service's OpenAPI spec is covered by the gateway. The gateway's `krakend.json` must define `x-contract-specs`.
-
-**x-contract-specs** is a top-level key in the KrakenD config (e.g. `config/krakend.json`). It is an object mapping backend hostname (as used in gateway routes) to `{ "openapi_url": "https://..." }`. The script loads each spec from `openapi_url` and checks that every backend route's method and path exists in the corresponding spec. Example:
-
-```json
-"x-contract-specs": {
-  "service-provider-manager": {
-    "openapi_url": "https://raw.githubusercontent.com/dcm-project/service-provider-manager/main/api/v1alpha1/openapi.yaml"
-  },
-  "catalog-manager": {
-    "openapi_url": "https://raw.githubusercontent.com/dcm-project/catalog-manager/main/api/v1alpha1/openapi.yaml"
-  }
-}
-```
-
-**Gateway repo:** In the repo that owns `krakend.json` (e.g. api-gateway), add a job to `.github/workflows/ci.yaml`:
-
-```yaml
-gateway-contract-test:
-  name: Gateway Contract Test
-  uses: dcm-project/shared-workflows/.github/workflows/gateway-contract-test.yaml@main
-  with:
-    warn-uncovered: true
-    watch-paths: |
-      config/krakend.json
-      config/krakend.json.tmpl
-```
-
-Use `warn-uncovered: true` to warn when the spec defines paths that no gateway route uses.
-
-**Manager repo:** In a backend/manager repo that exposes an OpenAPI spec and is wired in the gateway's `x-contract-specs`, create `.github/workflows/gateway-contract-test.yaml` (or add a job to CI) that calls the shared workflow with `krakend-repo` set to the gateway repo and `override-spec` so this repo's OpenAPI file is used for that service. Run on PRs when `api/**/openapi.yaml` (or equivalent) changes:
-
-```yaml
-name: Gateway Contract Test
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  contract-test:
-    uses: dcm-project/shared-workflows/.github/workflows/gateway-contract-test.yaml@main
-    with:
-      krakend-repo: dcm-project/api-gateway
-      krakend-config: config/krakend.json
-      override-spec: service-provider-manager=api/v1alpha1/openapi.yaml
-      service: service-provider-manager
-      watch-paths: |
-        api/**/openapi.yaml
-```
-
-`override-spec` is `hostname=path/to/openapi.yaml` (path relative to the manager repo root). `service` limits validation to that backend.
-
-**Key inputs:** `krakend-repo`, `krakend-config`, `override-spec`, `service`, `warn-uncovered`, `watch-paths`. See the workflow file for the full list.
 
 ### Gitleaks secret scanning
 
