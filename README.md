@@ -10,7 +10,7 @@ Reusable GitHub Actions workflows for DCM project repositories.
 | `check-aep.yaml` | Validate OpenAPI specs against AEP standards | Repos with OpenAPI |
 | `check-generate.yaml` | Verify generated files are in sync | Repos with code generation |
 | `check-clean-commits.yaml` | Ensure PR commits are cleaned before merge | All repos |
-| `build-push-quay.yaml` | Build container image and push to Quay.io | DCM repos with a Containerfile |
+| `build-push-quay.yaml` | Build container image and push to Quay.io | `dcm-project` repos with a Containerfile |
 | `tag-release.yaml` | Git-tag all service repos with a release or RC version | shared-workflows (manual dispatch) |
 | `gitleaks.yaml` | Scan for leaked secrets using gitleaks | All repos |
 
@@ -36,7 +36,7 @@ See individual workflow files for available options and inputs.
 
 ### Build and push to Quay.io
 
-Use `build-push-quay.yaml` from DCM repos that have a `Containerfile`. Create
+Use `build-push-quay.yaml` from `dcm-project` repos that have a `Containerfile`. Create
 `.github/workflows/build-push-quay.yaml`:
 
 ```yaml
