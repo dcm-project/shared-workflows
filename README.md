@@ -125,7 +125,10 @@ Follow [Semantic Versioning](https://semver.org/): `vMAJOR.MINOR.PATCH` (e.g.
 branches use the `release/` prefix (e.g. `release/v0.0.1`). Both release
 candidates (`v0.0.1-rc.1`) and final releases (`v0.0.1`) are git-tagged.
 
-**Required secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD` (org or repo level).
+**Required secrets:** `QUAY_USERNAME`, `QUAY_TOKEN` (org or repo level).
+`QUAY_TOKEN` is the Quay password for that account (robot token or user
+password). Map both to the workflow `quay-username` and `quay-password`
+inputs as in the example above.
 Default registry is `quay.io/dcm-project`. Images are built for `linux/amd64`
 and `linux/arm64`; override with the `platforms` input if needed.
 
@@ -144,7 +147,7 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1-rc.2 \
-  -f services="control-plane kubevirt-service-provider"
+  -f services="control-plane"
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1
@@ -159,7 +162,7 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 
 ```bash
 ./hack/tag-release.sh v0.0.1-rc.1                          # tag all services
-./hack/tag-release.sh v0.0.1-rc.2 control-plane kubevirt-service-provider  # specific services only
+./hack/tag-release.sh v0.0.1-rc.2 control-plane              # specific services only
 ./hack/tag-release.sh v0.0.1                                # final release
 ```
 

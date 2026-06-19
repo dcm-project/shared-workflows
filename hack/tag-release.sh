@@ -11,7 +11,7 @@
 #
 # Usage:
 #   ./hack/tag-release.sh v0.0.1-rc.1
-#   ./hack/tag-release.sh v0.0.1-rc.2 control-plane kubevirt-service-provider
+#   ./hack/tag-release.sh v0.0.1-rc.2 control-plane
 #   ./hack/tag-release.sh v0.0.1
 set -euo pipefail
 
@@ -31,7 +31,7 @@ usage() {
   echo ""
   echo "Examples:"
   echo "  $0 v0.0.1-rc.1"
-  echo "  $0 v0.0.1-rc.2 control-plane kubevirt-service-provider"
+  echo "  $0 v0.0.1-rc.2 control-plane"
   echo "  $0 v0.0.1"
   exit 1
 }
