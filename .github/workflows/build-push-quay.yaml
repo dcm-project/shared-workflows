@@ -1,6 +1,9 @@
 # Reusable workflow: build a container image and push to Quay.io.
-# Call from manager repos (service-provider-manager, catalog-manager, etc.).
-# Caller must pass QUAY_USERNAME and QUAY_PASSWORD (or robot token) as secrets.
+# Call from `dcm-project` repos that publish container images (control-plane,
+# service providers, etc.).
+# Caller repo secrets: QUAY_USERNAME and QUAY_TOKEN (Quay login password for
+# that account; robot token or user password). Map to quay-username and
+# quay-password inputs below.
 
 name: Build and Push to Quay
 
@@ -8,7 +11,7 @@ on:
   workflow_call:
     inputs:
       image-name:
-        description: 'Image name (e.g. service-provider-manager)'
+        description: 'Image name (e.g. control-plane)'
         type: string
         required: true
       registry:
@@ -37,10 +40,10 @@ on:
         default: 'linux/amd64,linux/arm64'
     secrets:
       quay-username:
-        description: 'Quay.io username or robot account name'
+        description: 'Quay username or robot account. Caller maps secrets.QUAY_USERNAME here.'
         required: true
       quay-password:
-        description: 'Quay.io password or robot token'
+        description: 'Quay login password (robot token or user password). Caller maps secrets.QUAY_TOKEN here.'
         required: true
 
 jobs:

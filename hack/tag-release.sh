@@ -11,16 +11,13 @@
 #
 # Usage:
 #   ./hack/tag-release.sh v0.0.1-rc.1
-#   ./hack/tag-release.sh v0.0.1-rc.2 placement-manager catalog-manager
+#   ./hack/tag-release.sh v0.0.1-rc.2 control-plane
 #   ./hack/tag-release.sh v0.0.1
 set -euo pipefail
 
 ORG="dcm-project"
 ALL_SERVICES=(
-  placement-manager
-  service-provider-manager
-  catalog-manager
-  policy-manager
+  control-plane
   kubevirt-service-provider
   k8s-container-service-provider
   acm-cluster-service-provider
@@ -34,7 +31,7 @@ usage() {
   echo ""
   echo "Examples:"
   echo "  $0 v0.0.1-rc.1"
-  echo "  $0 v0.0.1-rc.2 placement-manager catalog-manager"
+  echo "  $0 v0.0.1-rc.2 control-plane"
   echo "  $0 v0.0.1"
   exit 1
 }
