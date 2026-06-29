@@ -1,0 +1,64 @@
+# Reusable workflow: build Go binaries with GoReleaser and publish a GitHub release.
+# Call from CLI repos.
+#
+# On tag push: runs a full GoReleaser release (creates a versioned GitHub Release).
+# On branch push: runs GoReleaser in snapshot mode and uploads artifacts to a
+# rolling pre-release (default: "latest"), mirroring the :main container image
+# pattern from build-push-quay.yaml.
+
+name: GoReleaser Release
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: 'Path to go.mod file for Go version'
+        type: string
+        default: 'go.mod'
+      snapshot-release-name:
+        description: 'GitHub release name/tag for snapshot builds'
+        type: string
+        default: 'latest'
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+
+      - name: Run GoReleaser (release)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run GoReleaser (snapshot)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --snapshot --clean
+
+      - name: Upload snapshot to rolling pre-release
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ inputs.snapshot-release-name }}
+        run: |
+          gh release delete "$RELEASE_NAME" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$RELEASE_NAME" --prerelease --title "Latest Build (main)" --notes "Rolling pre-release built from \`main\` at ${GITHUB_SHA:0:7}.
+
+          **This is not a stable release.** It reflects the latest merged code and is replaced on every push to main." dist/*.tar.gz dist/*.zip dist/checksums.txt
