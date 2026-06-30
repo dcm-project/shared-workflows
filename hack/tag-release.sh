@@ -17,6 +17,7 @@ set -euo pipefail
 
 ORG="dcm-project"
 ALL_SERVICES=(
+  cli
   control-plane
   kubevirt-service-provider
   k8s-container-service-provider
