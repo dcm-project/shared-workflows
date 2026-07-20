@@ -77,7 +77,9 @@ git tag pushes do not update it.
 #### Release flow
 
 1. **Development happens on `main`** -- every merge triggers a build tagged
-   `main` and `<short-sha>`.
+   `main` and `<short-sha>`. For container services this means Quay images;
+   for the CLI this means rolling GitHub Releases (a `main` pre-release and
+   an immutable `<short-sha>` pre-release with platform binaries).
 
 2. **Create a release branch** prefixed with `release/`:
    ```bash
@@ -86,7 +88,7 @@ git tag pushes do not update it.
    ```
 
 3. **Push fixes** to the release branch. Each push triggers CI, producing a
-   `<short-sha>` image:
+   `<short-sha>`-tagged build:
    ```bash
    git checkout release/v0.0.1
    # ... commit fixes ...
@@ -99,8 +101,9 @@ git tag pushes do not update it.
    ```bash
    ./hack/tag-release.sh v0.0.1-rc.1
    ```
-   Each git tag push triggers CI, which builds the image with tags `v0.0.1-rc.1`
-   and `<short-sha>`.
+   Each git tag push triggers CI, which builds Quay images tagged
+   `v0.0.1-rc.1` and `<short-sha>` for each container service, and a GitHub
+   Release with platform binaries for the CLI.
 
 5. **QE validates** against the RC tag. If issues are found, push fixes to the
    release branch (step 3) and cut the next RC (step 4).
@@ -109,7 +112,8 @@ git tag pushes do not update it.
    ```bash
    ./hack/tag-release.sh v0.0.1
    ```
-   CI builds the image with tags `v0.0.1` and `<short-sha>` for each service.
+   CI builds the image with tags `v0.0.1` and `<short-sha>` for each
+   container service, and a GitHub Release with platform binaries for the CLI.
 
 7. **Cherry-pick** bug fixes from the release branch into `main` (if not already
    in main), so that issues caught during stabilization are propagated into
@@ -117,6 +121,15 @@ git tag pushes do not update it.
 
 8. **For the next release**, create a new branch (e.g. `release/v0.0.2` or
    `release/v0.1.0`) and repeat from step 2.
+
+**CLI note:** The CLI repo (`dcm-project/cli`) follows the same branch and
+tag conventions but produces GitHub Releases with platform binaries (via
+[GoReleaser](https://goreleaser.com/)) instead of container images on Quay.
+It is included in the `ALL_SERVICES` list in `hack/tag-release.sh`, so
+`tag-release.sh` and the `tag-release.yaml` workflow tag it alongside the
+container services. On push to `main`, the CLI also publishes rolling
+(`main`) and immutable (`<short-sha>`) pre-releases - the binary equivalent
+of the `:main` and `:<short-sha>` container image tags.
 
 #### Version convention
 
@@ -135,8 +148,9 @@ and `linux/arm64`; override with the `platforms` input if needed.
 #### Release tagging
 
 Use `tag-release.yaml` to git-tag all service repos at once from their release
-branch HEAD. Each tag push triggers CI, which builds and pushes the image. This
-works for both RC tags and final releases.
+branch HEAD. Each tag push triggers CI, which builds and pushes the container
+image (or a GitHub Release with platform binaries for the CLI). This works for
+both RC tags and final releases.
 
 **GitHub workflow** -- trigger via the Actions UI (shared-workflows -> Actions
 -> "Tag Release" -> Run workflow) or the CLI:
@@ -147,7 +161,7 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1-rc.2 \
-  -f services="control-plane"
+  -f services="cli control-plane"
 
 gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
   -f tag=v0.0.1
@@ -156,13 +170,13 @@ gh workflow run tag-release.yaml --repo dcm-project/shared-workflows \
 | Input | Required | Description |
 |---|---|---|
 | `tag` | Yes | Version tag to create (e.g. `v0.0.1-rc.1` or `v0.0.1`) |
-| `services` | No | Space-separated services to tag (default: all DCM services) |
+| `services` | No | Space-separated services to tag (default: `cli control-plane kubevirt-service-provider k8s-container-service-provider acm-cluster-service-provider`) |
 
 **Local script** (`hack/tag-release.sh` in this repo):
 
 ```bash
 ./hack/tag-release.sh v0.0.1-rc.1                          # tag all services
-./hack/tag-release.sh v0.0.1-rc.2 control-plane              # specific services only
+./hack/tag-release.sh v0.0.1-rc.2 cli control-plane           # specific services only
 ./hack/tag-release.sh v0.0.1                                # final release
 ```
 
