@@ -66,14 +66,14 @@ jobs:
 
       - name: Set up Go
         if: inputs.go-version-file == ''
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25.5'
           cache: false  # Single binary install; no project dependencies to cache
 
       - name: Set up Go (from version file)
         if: inputs.go-version-file != ''
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: ${{ inputs.go-version-file }}
           cache: false  # Single binary install; no project dependencies to cache
