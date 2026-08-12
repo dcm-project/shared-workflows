@@ -38,7 +38,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
-          pip install podman-compose
+          pip install podman-compose==1.6.0
 
       - name: Pre-pull container images
         if: inputs.images != ''
@@ -58,10 +58,24 @@ jobs:
       - name: Run tests
         run: make ${{ inputs.test-target }}
 
-      - name: Collect logs on failure
-        if: failure()
+      - name: Collect diagnostics
+        if: always()
         run: |
-          podman-compose logs
+          echo "::group::podman ps -a"
+          podman ps -a
+          echo "::endgroup::"
+
+          echo "::group::container health"
+          for c in $(podman ps -aq); do
+            name=$(podman inspect --format '{{.Name}}' "$c")
+            echo "--- $name ---"
+            podman inspect --format '{{json .State.Health}}' "$c" || true
+          done
+          echo "::endgroup::"
+
+          echo "::group::podman-compose logs"
+          podman-compose logs || true
+          echo "::endgroup::"
 
       - name: Stop services
         if: always()
