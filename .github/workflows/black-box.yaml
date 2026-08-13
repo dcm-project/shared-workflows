@@ -39,6 +39,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
           pip install podman-compose==1.6.0
+          # Rootless Podman runs healthchecks via systemd user timers. On GHA
+          # the user manager is often absent, so health stays "starting" and
+          # compose depends_on: service_healthy hangs until job timeout.
+          sudo loginctl enable-linger "$(id -un)"
+          sleep 1
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
 
       - name: Pre-pull container images
         if: inputs.images != ''
