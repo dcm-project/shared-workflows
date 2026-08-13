@@ -59,22 +59,28 @@ jobs:
         run: make ${{ inputs.test-target }}
 
       - name: Collect diagnostics
-        if: always()
+        if: failure() || cancelled()
+        continue-on-error: true
         run: |
+          set +e
           echo "::group::podman ps -a"
           podman ps -a
           echo "::endgroup::"
 
           echo "::group::container health"
-          for c in $(podman ps -aq); do
-            name=$(podman inspect --format '{{.Name}}' "$c")
+          for c in $(podman ps -aq 2>/dev/null); do
+            name=$(podman inspect --format '{{.Name}}' "$c" 2>/dev/null || echo "$c")
             echo "--- $name ---"
-            podman inspect --format '{{json .State.Health}}' "$c" || true
+            podman inspect --format '{{json .State.Health}}' "$c"
           done
           echo "::endgroup::"
 
-          echo "::group::podman-compose logs"
-          podman-compose logs || true
+          echo "::group::container logs"
+          for c in $(podman ps -aq 2>/dev/null); do
+            name=$(podman inspect --format '{{.Name}}' "$c" 2>/dev/null || echo "$c")
+            echo "--- $name ---"
+            podman logs --tail 200 "$c"
+          done
           echo "::endgroup::"
 
       - name: Stop services
